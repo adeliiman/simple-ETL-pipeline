@@ -1,11 +1,19 @@
-import requests
+import requests, os
 import pandas as pd
 import logging
-import psycopg2
 import sqlalchemy
 
 
 logging.basicConfig(filename="./etl.log", filemode='a', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s' )
+
+postgres_host = os.environ.get('postgres_host')
+postgres_database = os.environ.get('postgres_database')
+postgres_user = os.environ.get('postgres_user')
+postgres_password = os.environ.get('postgres_password')
+postgres_port = os.environ.get('postgres_port')
+
+connection_uri = f"postgresql+psycopg2://{postgres_user}:{postgres_password}@{postgres_host}:{postgres_port}/{postgres_database}"
+db_engine = sqlalchemy.create_engine(url=connection_uri)
 
 
 def extract_data():
@@ -23,36 +31,23 @@ def extract_data():
 
 
 def transform_data(df: pd.DataFrame):
-    df.drop(columns=['fontColor', 'fontSize', 'hEven'], inplace=True)
+    df.drop(columns=['fontColor', 'fontSize', 'hEven', 'lVal30', 'customLabel'], inplace=True)
+    df.columns = ["code", "date", "close", "last", "number_trade", "volume", "value", "yesterday", "name", "sector", "percent", "percent_last", "time", "color"]
     return df
 
 
-def load_data(df: pd.DataFrame):
-    conn = psycopg2.connect(host='127.0.0.1', database='iman', port=5432, user='iman', password='123456')
-    cur = conn.cursor()
-    query = """ CREATE TABLE IF NOT EXISTS tse_tmc (
-    insCode INTEGER,
-    dEven INTEGER,
-    pClosing FLOAT,
-    pDrCotVal FLOAT,
-    zTotTran FLOAT,
-    lSecVal CHAR(255),
-    percent FLOAT,
-    priceChangePercent FLOAT,
-    hEvenShow CHAR(255),
-    color CHAR(255),
-    customLabel CHAR(255)
-    )"""
-    cur.execute(query=query)
-    conn.commit()
-
-    connection_uri = "postgresql+psycopg2://iman:123456@localhost:5432/iman"
-    db_engine = sqlalchemy.create_engine(url=connection_uri)
-    res = df.to_sql(name='tse_tmc', con=db_engine, if_exists='replace', index=False)
+def load_data(df: pd.DataFrame, db_engine=db_engine):
+    res = df.to_sql(name='tse', con=db_engine, if_exists='replace', index=False)
     return res
 
 
 def etl():
     df = extract_data()
     df = transform_data(df)
-    load_data(df)
+    res = load_data(df)
+    print(res)
+
+etl()
+
+
+
