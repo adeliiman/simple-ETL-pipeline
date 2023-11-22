@@ -3,8 +3,8 @@ import pandas as pd
 import sqlalchemy
 from set_logger import get_logger
 
-
 logger = get_logger(__name__)
+
 
 postgres_host = os.environ.get('postgres_host')
 postgres_database = os.environ.get('postgres_database')
@@ -45,10 +45,14 @@ def load_data(df: pd.DataFrame, db_engine=db_engine):
 
 
 def etl():
-    df = extract_data()
-    df = transform_data(df)
-    res = load_data(df)
-    return res
+    try:
+        df = extract_data()
+        df = transform_data(df)
+        res = load_data(df)
+        return res
+    except Exception as e:
+        logger.exception(f"{e}")
+
 
 etl()
 
