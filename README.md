@@ -1,18 +1,18 @@
 # simple-ETL-pipeline
-data pipeline to extract data from TSETMC
-load data in postgreSQL
+## data pipeline to extract data from TSETMC
 
-set environment variable in $HOME/.bash_profile
-export postgres_host = ''
-export postgres_database = ''
-export postgres_user = ''
-export postgres_password = ''
-export postgres_port = ''
 
-# crontab
+#### set environment variable in  $HOME/.bash_profile
+> export postgres_host = 127.0.0.1 <br>
+> export postgres_database = db <br>
+> export postgres_user = user <br>
+> export postgres_password = pass <br>
+> export postgres_port = 5432 <br>
 
-crontab -e
+#### crontab
+
+> crontab -e
 
 add:
-* * * * * /path/to/script.sh >> ~/backup.log 2>&1
+> \* * * * * /path/to/script.sh >> ~/backup.log 2>&1
 
