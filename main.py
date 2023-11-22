@@ -40,7 +40,7 @@ def transform_data(df: pd.DataFrame):
 
 def load_data(df: pd.DataFrame, db_engine=db_engine):
     res = df.to_sql(name='tse', con=db_engine, if_exists='replace', index=False)
-    logger.info(f"load {res} records to postgreqSQL.")
+    logger.info(f"load {res} records to postgreSQL.")
     return res
 
 
