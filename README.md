@@ -1,5 +1,5 @@
 # simple-ETL-pipeline
-## data pipeline to extract data from TSETMC
+## Building a Data Pipeline to Retrieve Data from TSETMC and Store in PostgreSQL using Crontab
 
 
 #### set environment variable in  $HOME/.bash_profile
