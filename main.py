@@ -24,7 +24,7 @@ def extract_data():
         res = requests.get(url=url, headers=headers)
         data = res.json()
         df = pd.DataFrame(data)
-        logger.info(f"extract data from api done.")
+        logger.info(f"extract data from TSETMC done.")
         return df
     except Exception as e:
         logger.info("No Data From API.")
