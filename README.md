@@ -44,6 +44,17 @@ For example, export credentials in your shell or load them from a local, untrack
 
 `TSE_IF_EXISTS=replace` intentionally preserves the original project's snapshot behavior: each successful run replaces the contents/schema of the destination table. Use `append` only after defining how repeated snapshots should be distinguished and deduplicated.
 
+## Tests and continuous integration
+
+Install the development dependencies and run the unit tests locally:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+GitHub Actions runs the unit-test suite on Python 3.10, 3.11, and 3.12 for pushes to the main/improvement branches and for pull requests targeting `main`. The tests mock HTTP and database boundaries; they do not require live TSETMC access or PostgreSQL credentials.
+
 ## Run
 
 ```bash
