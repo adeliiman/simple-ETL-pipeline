@@ -35,7 +35,7 @@ Set these environment variables before running the job:
 | `postgres_user` | Yes | Database username |
 | `postgres_password` | Yes | Database password |
 | `postgres_port` | Yes | PostgreSQL port, usually `5432` |
-| `TSE_TABLE_NAME` | No | Destination table; defaults to `tse` |
+| `TSE_TABLE_NAME` | No | Destination table; defaults to `tse` in snapshot mode and `tse_history` in history mode |
 | `TSE_IF_EXISTS` | No | Snapshot mode only: `replace` (default), `append`, or `fail` |
 | `TSE_STORAGE_MODE` | No | `snapshot` (default) or `history` |
 | `ETL_LOG_FILE` | No | Log file path; defaults to `ETL.log` |
@@ -43,7 +43,7 @@ Set these environment variables before running the job:
 
 For example, export credentials in your shell or load them from a local, untracked environment file. Do not commit real credentials to Git.
 
-`TSE_STORAGE_MODE=snapshot` intentionally preserves the original project's behavior: the destination table is replaced on each successful run. To retain daily history, set `TSE_STORAGE_MODE=history`; it writes to `tse_history` by default (or `TSE_TABLE_NAME` if set), adds UTC `snapshot_at` and `snapshot_date` fields, and upserts on `(code, snapshot_date)`. Re-running the job on the same UTC date updates that date's instrument row instead of duplicating it. History mode uses PostgreSQL-specific `ON CONFLICT` and does not use `TSE_IF_EXISTS`. Use a dedicated history table; an existing table with an incompatible schema will fail rather than be silently rewritten.
+`TSE_STORAGE_MODE=snapshot` intentionally preserves the original project's behavior: the destination table is replaced on each successful run. To retain daily history, set `TSE_STORAGE_MODE=history`; it writes to `tse_history` by default (or `TSE_TABLE_NAME` if set), adds Tehran-local `snapshot_at` and `snapshot_date` fields, and upserts on `(code, snapshot_date)`. Re-running the job on the same Tehran calendar date updates that date's instrument row instead of duplicating it. History mode uses PostgreSQL-specific `ON CONFLICT` and does not use `TSE_IF_EXISTS`. Use a dedicated history table; an existing table with an incompatible schema will fail rather than be silently rewritten.
 
 ## Tests and continuous integration
 
@@ -85,5 +85,5 @@ Cron uses the environment available to the cron process, not necessarily the var
 ## Known limitations
 
 - The transform step intentionally checks the current expected TSETMC schema. If TSETMC changes its response columns, the job fails with a clear error instead of silently mapping incorrect data.
-- History mode retains one daily snapshot per instrument, not intraday ticks. The deduplication date is UTC; if you need Tehran-market-date semantics or multiple intraday snapshots, adapt the date/key policy before production use.
+- History mode retains one daily snapshot per instrument, not intraday ticks. The history key is one row per instrument per Tehran calendar date; it does not retain multiple intraday snapshots.
 - API availability and response structure are controlled by TSETMC and may change.
