@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 import sys
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
 import requests
-from sqlalchemy import URL, create_engine
+from sqlalchemy import URL, create_engine, text
 from sqlalchemy.engine import Engine
 
 from set_logger import get_logger
@@ -128,6 +130,68 @@ def transform_data(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def load_history_data(df: pd.DataFrame, engine: Engine, table_name: str) -> int:
+    """Upsert one daily market snapshot per instrument into a history table.
+
+    Rows are unique by (code, snapshot_date). Re-running the ETL on the same
+    day updates that day's row instead of creating duplicates. The history
+    table is separate from the default snapshot table.
+    """
+    if "code" not in df.columns:
+        raise ValueError("History mode requires the instrument 'code' column.")
+
+    snapshot_at = datetime.now(timezone.utc)
+    history_df = df.copy()
+    history_df["snapshot_at"] = snapshot_at
+    history_df["snapshot_date"] = snapshot_at.date()
+    history_df = history_df.drop_duplicates(subset=["code"], keep="last")
+
+    columns = list(history_df.columns)
+    quoted_columns = ", ".join(f'"{column}"' for column in columns)
+    select_columns = quoted_columns
+    update_columns = [column for column in columns if column not in {"code", "snapshot_date"}]
+    update_clause = ", ".join(
+        f'"{column}" = EXCLUDED."{column}"' for column in update_columns
+    )
+    index_name = f"uq_{table_name}_code_snapshot_date"[:60]
+    staging_table = f"_etl_stage_{uuid.uuid4().hex[:12]}"
+
+    # Identifiers are validated by load_data before reaching this function.
+    with engine.begin() as connection:
+        # Create an empty table from the DataFrame schema only when it is new.
+        history_df.head(0).to_sql(
+            name=table_name, con=connection, if_exists="append", index=False
+        )
+        connection.execute(text(
+            f'CREATE UNIQUE INDEX IF NOT EXISTS "{index_name}" '
+            f'ON "{table_name}" ("code", "snapshot_date")'
+        ))
+        history_df.to_sql(
+            name=staging_table,
+            con=connection,
+            if_exists="fail",
+            index=False,
+            chunksize=1000,
+            method="multi",
+        )
+        try:
+            result = connection.execute(text(
+                f'INSERT INTO "{table_name}" ({quoted_columns}) '
+                f'SELECT {select_columns} FROM "{staging_table}" '
+                f'ON CONFLICT ("code", "snapshot_date") DO UPDATE '
+                f'SET {update_clause}'
+            ))
+            rows_written = int(result.rowcount or 0)
+        finally:
+            connection.execute(text(f'DROP TABLE IF EXISTS "{staging_table}"'))
+
+    logger.info(
+        "Upserted %s daily instrument rows into history table '%s'.",
+        rows_written, table_name,
+    )
+    return rows_written
+
+
 def load_data(
     df: pd.DataFrame,
     db_engine: Engine | None = None,
@@ -135,21 +199,30 @@ def load_data(
     table_name: str | None = None,
     if_exists: str | None = None,
 ) -> int:
-    """Load a market snapshot into PostgreSQL.
+    """Load the latest snapshot or upsert a daily history snapshot.
 
-    The default 'replace' mode preserves the original snapshot behavior.
-    Set TSE_IF_EXISTS=append to retain previous snapshots (add a timestamp/key
-    strategy before using append for repeated scheduled runs).
+    TSE_STORAGE_MODE=snapshot (default) preserves the original replace behavior.
+    TSE_STORAGE_MODE=history writes to a separate table and upserts one row per
+    instrument per UTC calendar day. History mode defaults to 'tse_history'.
     """
     if df is None or df.empty:
         raise ValueError("Refusing to load an empty DataFrame.")
 
     engine = db_engine or get_database_engine()
-    target_table = table_name or os.getenv("TSE_TABLE_NAME", "tse")
-    write_mode = if_exists or os.getenv("TSE_IF_EXISTS", "replace")
+    storage_mode = os.getenv("TSE_STORAGE_MODE", "snapshot").lower()
+    target_table = table_name or os.getenv(
+        "TSE_TABLE_NAME", "tse_history" if storage_mode == "history" else "tse"
+    )
 
     if not target_table.replace("_", "").isalnum():
         raise ValueError("TSE_TABLE_NAME may contain only letters, numbers, and underscores.")
+
+    if storage_mode == "history":
+        return load_history_data(df, engine, target_table)
+    if storage_mode != "snapshot":
+        raise ValueError("TSE_STORAGE_MODE must be 'snapshot' or 'history'.")
+
+    write_mode = if_exists or os.getenv("TSE_IF_EXISTS", "replace")
     if write_mode not in {"fail", "replace", "append"}:
         raise ValueError("TSE_IF_EXISTS must be one of: fail, replace, append.")
 
