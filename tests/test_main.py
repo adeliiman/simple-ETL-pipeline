@@ -123,3 +123,35 @@ def test_load_data_passes_expected_options(monkeypatch):
     assert captured["name"] == "tse_test"
     assert captured["if_exists"] == "append"
     assert captured["index"] is False
+
+
+
+def test_history_mode_uses_history_table_and_upsert_helper(monkeypatch):
+    frame = pd.DataFrame({"code": ["ABC"], "close": [100]})
+    captured = {}
+
+    def fake_history(data, engine, table_name):
+        captured["data"] = data
+        captured["engine"] = engine
+        captured["table_name"] = table_name
+        return 1
+
+    monkeypatch.setenv("TSE_STORAGE_MODE", "history")
+    monkeypatch.delenv("TSE_TABLE_NAME", raising=False)
+    monkeypatch.setattr(main, "load_history_data", fake_history)
+    engine = object()
+
+    count = main.load_data(frame, db_engine=engine)
+
+    assert count == 1
+    assert captured["engine"] is engine
+    assert captured["table_name"] == "tse_history"
+    assert captured["data"].equals(frame)
+
+
+def test_load_data_rejects_unknown_storage_mode(monkeypatch):
+    monkeypatch.setenv("TSE_STORAGE_MODE", "archive")
+    frame = pd.DataFrame({"code": ["ABC"]})
+
+    with pytest.raises(ValueError, match="TSE_STORAGE_MODE"):
+        main.load_data(frame, db_engine=object(), table_name="tse_test")
