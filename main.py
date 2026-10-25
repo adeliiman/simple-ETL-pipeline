@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -140,7 +141,7 @@ def load_history_data(df: pd.DataFrame, engine: Engine, table_name: str) -> int:
     if "code" not in df.columns:
         raise ValueError("History mode requires the instrument 'code' column.")
 
-    snapshot_at = datetime.now(timezone.utc)
+    snapshot_at = datetime.now(ZoneInfo("Asia/Tehran"))
     history_df = df.copy()
     history_df["snapshot_at"] = snapshot_at
     history_df["snapshot_date"] = snapshot_at.date()
@@ -203,7 +204,7 @@ def load_data(
 
     TSE_STORAGE_MODE=snapshot (default) preserves the original replace behavior.
     TSE_STORAGE_MODE=history writes to a separate table and upserts one row per
-    instrument per UTC calendar day. History mode defaults to 'tse_history'.
+    instrument per Tehran calendar day. History mode defaults to 'tse_history'.
     """
     if df is None or df.empty:
         raise ValueError("Refusing to load an empty DataFrame.")
